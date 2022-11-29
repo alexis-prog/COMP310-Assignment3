@@ -11,6 +11,7 @@
 #define MAGIC_NUMBER 0xABCD0005
 #define BLOCK_SIZE 1024
 #define NUM_BLOCKS 2048
+#define NUM_FREE_BLOCKS (NUM_BLOCKS / 8 / BLOCK_SIZE + 1)
 
 #define BLOCK_CACHE_SIZE 16
 #define INODE_CACHE_SIZE 16
@@ -21,6 +22,8 @@
 
 #define DIR_ENTRY_SIZE 64
 #define DIR_ENTRIES_PER_BLOCK (BLOCK_SIZE / DIR_ENTRY_SIZE)
+
+#define MAXFILENAME (64 - 5)
 
 // Never trust char size
 typedef uint8_t byte_t;
@@ -47,7 +50,7 @@ typedef struct _inode_t {
 typedef struct _dir_entry_t {
     byte_t valid;
     uint32_t inode;
-    char filename[64 - sizeof(byte_t) - sizeof(uint32_t)];
+    char filename[MAXFILENAME];
 } dir_entry_t;
 
 // Superblock representation (fixed at 1024 byte for ease of use)
@@ -156,18 +159,16 @@ void set_block_status(uint32_t block_num, int status){
     if(status == 1){
         block.data[block_num / 8 % BLOCK_SIZE] |= (1 << (block_num % 8));
     } else {
-        block.data[block_num / 8 % BLOCK_SIZE] &= ~(1 << (block_num % 8)); // inverted bitmask to clear bit
+        block.data[block_num / 8 % BLOCK_SIZE] &= ~(1 << (block_num % 8));
     }
 }
 
-uint32_t get_free_block(){
-    int num_free_block = NUM_BLOCKS / 8 / BLOCK_SIZE;
-
-    for(int i = num_free_block; i >= 0; i--){
+uint32_t get_next_free_block(){
+    for(int i = NUM_FREE_BLOCKS - 1; i >= 0; i--){
         block_t block;
         _read_block(superblock->file_system_size - 1 - i, &block);
 
-        for(int j = 0; j < BLOCK_SIZE; j++){
+        for(int j = BLOCK_SIZE-1; j >= 0; j--){
             if(block.data[j] != 0xFF){
                 for(int k = 0; k < 8; k++){
                     if((block.data[j] & (1 << k)) == 0){
@@ -230,7 +231,7 @@ void get_inode(uint32_t inode_num, inode_t* inode){
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] == inode_num){
             inode_cache_age[i] = inode_rolling_counter;
-            return i;
+            memcpy(inode, &inode_cache[i], sizeof(inode_t));
         }
     }
 
@@ -287,7 +288,7 @@ void write_inode(inode_t* node, uint32_t index){
     }
 
     uint32_t oldest = get_oldest_inode();
-    memcmp(&inode_cache[oldest], node, sizeof(inode_t));
+    memcpy(&inode_cache[oldest], node, sizeof(inode_t));
     inode_cache_index[oldest] = index;
     inode_cache_age[oldest] = inode_rolling_counter;
 
@@ -306,8 +307,32 @@ void init_superblock(){
     write_blocks(0, 1, (void *) superblock);
 }
 
-void init_free_list(){
+void init_root_node(){
+    inode_t root_node;
+    
+    uint32_t dir_block = get_next_free_block();
+    set_block_status(dir_block, 1);
+    block_t *empty_block = calloc(1, sizeof(block_t));
+    _write_block(dir_block, empty_block);
 
+    root_node.mode = 0;
+    root_node.link_count = 1;
+    root_node.size = 0;
+    root_node.direct[0] = dir_block;
+    root_node.indirect = -1;
+
+    write_inode(&root_node, 0);
+}
+
+void init_free_list(){
+    for(int i = 0; i < NUM_BLOCKS; i++){
+        set_block_status(i, 0);
+    }
+    set_block_status(0, 1);
+    set_block_status(1, 1);
+    for(int i = 0; i < NUM_FREE_BLOCKS; i++){
+        set_block_status(NUM_FREE_BLOCKS - i - 1, 1);
+    }
 }
 
 
@@ -344,6 +369,41 @@ void mksfs(int fresh)
             printf("Error: Could not open disk file - Aborting %s\n\n", disk_name);
             exit(1);
         }
+
+        _read_block(0, (void *) superblock);
+        // todo assert
     }
 }
 
+
+int sfs_getnextfilename(char* name){
+    return 0;
+}
+
+int sfs_getfilesize(const char* name){
+    return 0;
+}
+
+int sfs_fopen(char* name){
+    return 0;
+}
+
+int sfs_fclose(int fd){
+    return 0;
+}
+
+int sfs_fwrite(int fd, const char* buf, int ln){
+    return 0;
+}
+
+int sfs_fread(int fd, char* buf, int ln){
+    return 0;
+}
+
+int sfs_fseek(int fd, int offset){
+    return 0;
+}
+
+int sfs_remove(char* name){
+    return 0;
+}
