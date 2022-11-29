@@ -9,8 +9,8 @@
 #include "disk_emu.h"
 
 #define MAGIC_NUMBER 0xABCD0005
-#define BLOCK_SIZE 1024
-#define NUM_BLOCKS 2048
+#define BLOCK_SIZE 64
+#define NUM_BLOCKS 32
 #define NUM_FREE_BLOCKS (NUM_BLOCKS / 8 / BLOCK_SIZE + 1)
 
 #define BLOCK_CACHE_SIZE 16
@@ -71,17 +71,17 @@ superblock_t *superblock = NULL;
 block_t block_cache[BLOCK_CACHE_SIZE];
 uint32_t block_cache_index[BLOCK_CACHE_SIZE];
 uint16_t block_cache_age[BLOCK_CACHE_SIZE];
-uint16_t block_rolling_counter = 0;
+uint16_t block_rolling_counter = 1;
 
 // Inode Cache
 inode_t inode_cache[INODE_CACHE_SIZE];
 uint32_t inode_cache_index[INODE_CACHE_SIZE];
 uint16_t inode_cache_age[INODE_CACHE_SIZE];
-uint16_t inode_rolling_counter = 0;
+uint16_t inode_rolling_counter = 1;
 
 // Block cache management
 uint32_t get_oldest_block(){
-    uint32_t oldest_index = -1;
+    uint32_t oldest_index = 0;
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
         if(block_cache_index[i] == -1){
             return i;
@@ -161,6 +161,8 @@ void set_block_status(uint32_t block_num, int status){
     } else {
         block.data[block_num / 8 % BLOCK_SIZE] &= ~(1 << (block_num % 8));
     }
+
+    _write_block(superblock->file_system_size - 1 -  block_index, &block);
 }
 
 uint32_t get_next_free_block(){
@@ -183,6 +185,14 @@ uint32_t get_next_free_block(){
     exit(1);
 }
 
+void flush_block_cache(){
+    for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
+        if(block_cache_index[i] != -1){
+            write_blocks(block_cache_index[i], 1, block_cache[i].data);
+        }
+    }
+}
+
 // I-Node management
 void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     uint32_t block_num = inode_num / INODES_PER_BLOCK;
@@ -194,7 +204,7 @@ void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
             _write_block(0, (block_t*)superblock);
         } else {
             printf("Error: Block %d is not free, failed contiguous allocation of i-node table\n", block_num);
-            return;
+            exit(1);
         }
     }
 
@@ -295,6 +305,13 @@ void write_inode(inode_t* node, uint32_t index){
     inode_rolling_counter++;
 }
 
+void flush_inode_cache(){
+    for(int i = 0; i < INODE_CACHE_SIZE; i++){
+        if(inode_cache_index[i] != -1){
+            write_inode_to_disk(inode_cache_index[i], &inode_cache[i]);
+        }
+    }
+}
 
 // Initialization helper functions
 void init_superblock(){
@@ -304,7 +321,8 @@ void init_superblock(){
     superblock->inode_table_length = 1;
     superblock->root_dir_inode = 0;
 
-    write_blocks(0, 1, (void *) superblock);
+    _write_block(0, (block_t*)superblock);
+    //write_blocks(0, 1, (void *) superblock);
 }
 
 void init_root_node(){
@@ -331,7 +349,7 @@ void init_free_list(){
     set_block_status(0, 1);
     set_block_status(1, 1);
     for(int i = 0; i < NUM_FREE_BLOCKS; i++){
-        set_block_status(NUM_FREE_BLOCKS - i - 1, 1);
+        set_block_status(NUM_BLOCKS - i - 1, 1);
     }
 }
 
@@ -360,8 +378,10 @@ void mksfs(int fresh)
         }
 
         init_superblock();
-        init_root_node();
         init_free_list();
+        init_root_node();
+        flush_inode_cache();
+        flush_block_cache();
     }
     else
     {

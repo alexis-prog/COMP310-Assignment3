@@ -1,0 +1,9 @@
+{
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/2021/aviauc/courses/COMP310/Assignments/Assignment3/Build",
+            "binaryPath": "/home/2021/aviauc/courses/COMP310/Assignments/Assignment3/Build/sfs",
+            "binaryArgs": []
+        }
+    ]
+}
