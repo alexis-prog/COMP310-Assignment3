@@ -9,9 +9,10 @@
 #include "disk_emu.h"
 
 #define MAGIC_NUMBER 0xABCD0005
-#define BLOCK_SIZE 64
-#define NUM_BLOCKS 32
+#define BLOCK_SIZE 1024
+#define NUM_BLOCKS 2048
 #define NUM_FREE_BLOCKS (NUM_BLOCKS / 8 / BLOCK_SIZE + 1)
+#define POINTER_SIZE 4
 
 #define BLOCK_CACHE_SIZE 16
 #define INODE_CACHE_SIZE 16
@@ -19,6 +20,8 @@
 // Dynamic Constants
 #define INODE_SIZE 64
 #define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)
+#define INODE_DIRECT_ACCESS 12
+#define INODE_MAX_BLOCKS (INODE_DIRECT_ACCESS + BLOCK_SIZE / POINTER_SIZE)
 
 #define DIR_ENTRY_SIZE 64
 #define DIR_ENTRIES_PER_BLOCK (BLOCK_SIZE / DIR_ENTRY_SIZE)
@@ -41,7 +44,7 @@ typedef struct _inode_t {
     uint32_t link_count;
     uint32_t size;
 
-    uint32_t direct[12];
+    uint32_t direct[INODE_DIRECT_ACCESS];
     uint32_t indirect;
 } inode_t;
 
@@ -166,18 +169,9 @@ void set_block_status(uint32_t block_num, int status){
 }
 
 uint32_t get_next_free_block(){
-    for(int i = NUM_FREE_BLOCKS - 1; i >= 0; i--){
-        block_t block;
-        _read_block(superblock->file_system_size - 1 - i, &block);
-
-        for(int j = BLOCK_SIZE-1; j >= 0; j--){
-            if(block.data[j] != 0xFF){
-                for(int k = 0; k < 8; k++){
-                    if((block.data[j] & (1 << k)) == 0){
-                        return i * BLOCK_SIZE * 8 + j * 8 + k;
-                    }
-                }
-            }
+    for(int i = NUM_BLOCKS - 1; i >= 0; i--){
+        if(is_block_free(i)){
+            return i;
         }
     }
 
@@ -313,6 +307,55 @@ void flush_inode_cache(){
             write_inode_to_disk(inode_cache_index[i], &inode_cache[i]);
         }
     }
+}
+
+void read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
+    uint32_t block_num = offset / BLOCK_SIZE;
+    uint32_t block_offset = offset % BLOCK_SIZE;
+
+    if(offset + size > node->size){
+        printf("Error: Attempted to read past end of file\n");
+        exit(1);
+    }
+
+    uint32_t bytes_read = 0;
+    while(bytes_read < size){
+        uint32_t block_index = node->direct[block_num];
+
+        block_t block;
+        _read_block(block_index, &block);
+
+        uint32_t bytes_to_read = BLOCK_SIZE - block_offset;
+        if(bytes_to_read > size - bytes_read){
+            bytes_to_read = size - bytes_read;
+        }
+
+        memcpy(buffer + bytes_read, block.data + block_offset, bytes_to_read);
+
+        bytes_read += bytes_to_read;
+        block_num++;
+        block_offset = 0;
+    }
+}
+
+void write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
+    uint32_t block_num = offset / BLOCK_SIZE;
+    uint32_t block_offset = offset % BLOCK_SIZE;
+
+
+
+    uint32_t block_index = node->direct[block_num];
+    if(block_index == 0){
+        block_index = get_next_free_block();
+        node->direct_blocks[block_num] = block_index;
+    }
+
+    byte_t block[BLOCK_SIZE];
+    read_blocks(block_index, 1, block);
+
+    memcpy(block + block_offset, data, length);
+
+    write_blocks(block_index, 1, block);
 }
 
 // Initialization helper functions
