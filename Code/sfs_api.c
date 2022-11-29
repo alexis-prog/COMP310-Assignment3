@@ -212,6 +212,8 @@ void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     _read_block(block_num + 1, &block);
 
     memcpy(block.data + (inode_num % INODES_PER_BLOCK) * sizeof(inode_t), inode, sizeof(inode_t));
+
+    _write_block(block_num + 1, &block);
 }
 
 uint32_t get_oldest_inode(){
