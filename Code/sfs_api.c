@@ -309,7 +309,7 @@ void flush_inode_cache(){
     }
 }
 
-void read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
+uint32_t read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
@@ -336,26 +336,77 @@ void read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer
         block_num++;
         block_offset = 0;
     }
+
+    return bytes_read;
 }
 
-void write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
+uint32_t write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
+    // expand file if necessary
+    uint32_t new_size = offset + length;
+    if(new_size > node->size){
+        if((new_size) / BLOCK_SIZE >= INODE_MAX_BLOCKS){
+            printf("Error: Attempted to write past max file size\n");
+            exit(1);
+        }
 
+        uint32_t current_block = node->size / BLOCK_SIZE;
+        if(current_block < new_size / BLOCK_SIZE){
+            for(int i = current_block; i < new_size / BLOCK_SIZE; i++){
+                uint32_t block_index = get_next_free_block();
 
-    uint32_t block_index = node->direct[block_num];
-    if(block_index == 0){
-        block_index = get_next_free_block();
-        node->direct_blocks[block_num] = block_index;
+                if(i < INODE_DIRECT_ACCESS){
+                    node->direct[i] = block_index;
+                }else{
+                    if(node->indirect == 0){
+                        node->indirect = get_next_free_block();
+                    }
+
+                    block_t block;
+                    _read_block(node->indirect, &block);
+
+                    memcpy(block.data + (i - INODE_DIRECT_ACCESS) * sizeof(uint32_t), &block_index, sizeof(uint32_t));
+
+                    _write_block(node->indirect, &block);
+                }
+            }
+        }
+
+        node->size = new_size;
     }
 
-    byte_t block[BLOCK_SIZE];
-    read_blocks(block_index, 1, block);
+    uint32_t bytes_written = 0;
+    while(bytes_written < length){
+        uint32_t block_index;
+        if(block_num < INODE_DIRECT_ACCESS){
+            block_index = node->direct[block_num];
+        }else{
+            block_t block;
+            _read_block(node->indirect, &block);
 
-    memcpy(block + block_offset, data, length);
+            memcpy(&block_index, block.data + (block_num - INODE_DIRECT_ACCESS) * sizeof(uint32_t), sizeof(uint32_t));
+        }
 
-    write_blocks(block_index, 1, block);
+        block_t block;
+        _read_block(block_index, &block);
+
+        uint32_t bytes_to_write = BLOCK_SIZE - block_offset;
+        if(bytes_to_write > length - bytes_written){
+            bytes_to_write = length - bytes_written;
+        }
+
+        memcpy(block.data + block_offset, data + bytes_written, bytes_to_write);
+
+        _write_block(block_index, &block);
+
+        bytes_written += bytes_to_write;
+        block_num++;
+        block_offset = 0;
+    }
+
+    return bytes_written;
 }
 
 // Initialization helper functions
