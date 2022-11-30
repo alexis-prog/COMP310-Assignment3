@@ -21,8 +21,8 @@
 #define DIR_ENTRY_SIZE 64
 #define DIR_ENTRIES_PER_BLOCK (BLOCK_SIZE / DIR_ENTRY_SIZE)
 
-#define MAXFILENAME (64 - 4 - 4) // take array pointer in consideration (why the - 4)
-#define MAX_FNAME_LENGTH MAXFILENAME
+#define MAXFILENAME (DIR_ENTRY_SIZE - 4 - 4) // take array pointer in consideration (why the - 4)
+//#define MAX_FNAME_LENGTH MAXFILENAME
 
 #define MAX_OPEN_FILES 32
 

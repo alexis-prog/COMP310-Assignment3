@@ -142,14 +142,9 @@ int sfs_getfilesize(const char* name){
 int sfs_fopen(char* name){
     int free = -1;
 
-    // check if file is already opened
-    /*for(int i = 0; i < MAX_OPEN_FILES; i++){
-        if(opened_files_names[i] == NULL){
-            free = i;
-        }else if(strcmp(opened_files_names[i], name) == 0){
-            return i;
-        }
-    }*/
+    if(strlen(name) > MAXFILENAME){
+        return -1;
+    }
     
     for(int i = 0; i < MAX_OPEN_FILES; i++){
         if(opened_files[i] == -1){
@@ -161,7 +156,7 @@ int sfs_fopen(char* name){
 
     if(free == -1){
         printf("Error: Could not open file - No free file descriptors\n\n");
-        exit(1);
+        return -1;
     }
 
     // check if file exists
@@ -275,6 +270,21 @@ int sfs_fseek(int fd, int offset){
 }
 
 int sfs_remove(char* name){
+    for(int i = 0; i < get_dir_table_size(); i++){
+        if(strcmp(name, get_dir_table_entry(i)->filename) == 0){
+            int n = get_dir_table_entry(i)->inode;
 
-    return 0;
+            for(int j = 0; j < MAX_OPEN_FILES; j++){
+                if(opened_files[j] == n){
+                    sfs_fclose(j);
+                }
+            }
+
+            remove_inode(n);
+            remove_from_dir_table(i);
+            return n;
+        }
+    }
+
+    return -1;
 }

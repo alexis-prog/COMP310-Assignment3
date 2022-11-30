@@ -283,3 +283,39 @@ int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t*
 
     return bytes_written;
 }
+
+void remove_inode(uint32_t index){
+    inode_t node;
+    get_inode(index, &node);
+
+    node.size = 0;
+    node.link_count--;
+
+    if(node.link_count <=0){
+        for(int i = 0; i < INODE_DIRECT_ACCESS; i++){
+            if(node.direct[i] != -1){
+                set_block_status(node.direct[i], 0);
+                node.direct[i] = -1;
+            }
+        }
+
+        if(node.indirect != -1){
+            block_t indirect;
+            _read_block(node.indirect, &indirect);
+
+            for(int i = 0; i < BLOCK_SIZE / sizeof(uint32_t); i++){
+                uint32_t block_index;
+                memcpy(&block_index, indirect.data + i * sizeof(uint32_t), sizeof(uint32_t));
+
+                if(block_index != -1){
+                    set_block_status(block_index, 0);
+                }
+            }
+
+            set_block_status(node.indirect, 0);
+            node.indirect = -1;
+        }
+    }
+
+    write_inode(&node, index);
+}

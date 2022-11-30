@@ -18,4 +18,6 @@ void write_to_dir_table(int, dir_entry_t*);
 
 int get_free_dir_table_entry();
 
+int remove_from_dir_table(int);
+
 #endif
