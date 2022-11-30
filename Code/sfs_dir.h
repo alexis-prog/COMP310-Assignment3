@@ -12,4 +12,10 @@ void read_dir_table();
 
 dir_entry_t* get_dir_table_entry(int);
 
+int get_dir_table_size();
+
+void write_to_dir_table(int, dir_entry_t*);
+
+int get_free_dir_table_entry();
+
 #endif

@@ -10,6 +10,8 @@
 #include "sfs_block.h"
 #include "disk_emu.h"
 
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+
 // Inode Cache
 inode_t inode_cache[INODE_CACHE_SIZE];
 uint32_t inode_cache_index[INODE_CACHE_SIZE];
@@ -129,10 +131,16 @@ void write_inode(inode_t* node, uint32_t index){
         }
     }
 
-    uint32_t oldest = get_oldest_inode();
-    memcpy(&inode_cache[oldest], node, sizeof(inode_t));
-    inode_cache_index[oldest] = index;
-    inode_cache_age[oldest] = inode_rolling_counter;
+    uint32_t cache_index = get_oldest_inode();
+    for(int i = 0; i < INODE_CACHE_SIZE; i++){
+        if(inode_cache_index[i] == index){
+            cache_index = i;
+            break;
+        }
+    }
+    memcpy(&inode_cache[cache_index], node, sizeof(inode_t));
+    inode_cache_index[cache_index] = index;
+    inode_cache_age[cache_index] = inode_rolling_counter;
 
     inode_rolling_counter++;
 }
@@ -149,14 +157,27 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
-    if(offset + size > node->size){
+/*
+    if(offset + size > node->size + 1){
         printf("Error: Attempted to read past end of file\n");
         return -1;
-    }
+    }*/
+
+    uint32_t eof_block = node->size / BLOCK_SIZE;
+    uint32_t eof_block_max = node->size % BLOCK_SIZE;
 
     uint32_t bytes_read = 0;
     while(bytes_read < size){
-        uint32_t block_index = node->direct[block_num];
+
+        uint32_t block_index;
+        if(block_num < INODE_DIRECT_ACCESS){
+            block_index = node->direct[block_num];
+        }else{
+            block_t indirect;
+            _read_block(node->indirect, &indirect);
+
+            memcpy(&block_index, indirect.data + (block_num - INODE_DIRECT_ACCESS) * sizeof(uint32_t), sizeof(uint32_t));
+        }
 
         block_t block;
         _read_block(block_index, &block);
@@ -166,8 +187,13 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
             bytes_to_read = size - bytes_read;
         }
 
-        memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
+        if(block_num == eof_block){
+            memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, MIN(bytes_to_read + offset, eof_block_max) - block_offset);
+        }else{
+            memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
+        }
 
+    
         bytes_read += bytes_to_read;
         block_num++;
         block_offset = 0;
@@ -189,26 +215,26 @@ int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length
         }
 
         uint32_t current_block = node->size / BLOCK_SIZE;
-        if(current_block < new_size / BLOCK_SIZE){
-            for(int i = current_block; i < new_size / BLOCK_SIZE; i++){
-                uint32_t block_index = get_next_free_block();
 
-                if(i < INODE_DIRECT_ACCESS){
-                    node->direct[i] = block_index;
-                }else{
-                    if(node->indirect == 0){
-                        node->indirect = get_next_free_block();
-                    }
+        for(int i = current_block; i < new_size / BLOCK_SIZE + 1; i++){
+            uint32_t block_index = get_next_free_block();
 
-                    block_t block;
-                    _read_block(node->indirect, &block);
-
-                    memcpy(block.data + (i - INODE_DIRECT_ACCESS) * sizeof(uint32_t), &block_index, sizeof(uint32_t));
-
-                    _write_block(node->indirect, &block);
+            if(i < INODE_DIRECT_ACCESS){
+                node->direct[i] = block_index;
+            }else{
+                if(node->indirect == 0){
+                    node->indirect = get_next_free_block();
                 }
+
+                block_t block;
+                _read_block(node->indirect, &block);
+
+                memcpy(block.data + (i - INODE_DIRECT_ACCESS) * sizeof(uint32_t), &block_index, sizeof(uint32_t));
+
+                _write_block(node->indirect, &block);
             }
         }
+
 
         node->size = new_size;
     }

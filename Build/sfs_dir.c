@@ -40,7 +40,7 @@ int get_dir_table_size(){
 void write_dir_table(){
     inode_t *root_node;
     get_inode(get_superblock()->root_dir_inode , root_node);
-    write_to_inode(root_node, 0, root_node->size, dir_table);
+    write_to_inode(root_node, 0, dir_table, root_node->size);
 }
 
 void write_to_dir_table(int i, dir_entry_t *entry){
@@ -56,5 +56,14 @@ void write_to_dir_table(int i, dir_entry_t *entry){
     memcpy(dir_table + i, entry, sizeof(dir_entry_t));
 
     write_dir_table();
+}
+
+int get_free_dir_table_entry(){
+    for(int i = 0; i < dir_table_size; i++){
+        if(dir_table[i].inode == 0){
+            return i;
+        }
+    }
+    return dir_table_size;
 }
 
