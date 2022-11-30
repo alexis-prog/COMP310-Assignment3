@@ -10,7 +10,7 @@
 
 #define MAGIC_NUMBER 0xABCD0005
 #define BLOCK_SIZE 1024
-#define NUM_BLOCKS 2048
+#define NUM_BLOCKS 32
 #define NUM_FREE_BLOCKS (NUM_BLOCKS / 8 / BLOCK_SIZE + 1)
 #define POINTER_SIZE 4
 
@@ -27,6 +27,8 @@
 #define DIR_ENTRIES_PER_BLOCK (BLOCK_SIZE / DIR_ENTRY_SIZE)
 
 #define MAXFILENAME (64 - 5)
+
+#define MAX_OPEN_FILES 16
 
 // Never trust char size
 typedef uint8_t byte_t;
@@ -309,13 +311,13 @@ void flush_inode_cache(){
     }
 }
 
-uint32_t read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
+int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
     if(offset + size > node->size){
         printf("Error: Attempted to read past end of file\n");
-        exit(1);
+        return -1;
     }
 
     uint32_t bytes_read = 0;
@@ -330,7 +332,7 @@ uint32_t read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* bu
             bytes_to_read = size - bytes_read;
         }
 
-        memcpy(buffer + bytes_read, block.data + block_offset, bytes_to_read);
+        memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
 
         bytes_read += bytes_to_read;
         block_num++;
@@ -340,7 +342,7 @@ uint32_t read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* bu
     return bytes_read;
 }
 
-uint32_t write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
+int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
@@ -349,7 +351,7 @@ uint32_t write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t l
     if(new_size > node->size){
         if((new_size) / BLOCK_SIZE >= INODE_MAX_BLOCKS){
             printf("Error: Attempted to write past max file size\n");
-            exit(1);
+            return -1;
         }
 
         uint32_t current_block = node->size / BLOCK_SIZE;
@@ -408,6 +410,8 @@ uint32_t write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t l
 
     return bytes_written;
 }
+
+
 
 // Initialization helper functions
 void init_superblock(){
@@ -492,16 +496,113 @@ void mksfs(int fresh)
 }
 
 
+uint32_t file_iter_id = 0;
+
 int sfs_getnextfilename(char* name){
-    return 0;
+    inode_t root_node;
+    get_inode(superblock->root_dir_inode, &root_node);
+
+    dir_entry_t entry;
+    int n = read_from_inode(&root_node, file_iter_id * sizeof(dir_entry_t), sizeof(dir_entry_t), (void *)&entry);
+
+    if(n == 0 || entry.valid == 0){
+        return 0;
+    }
+
+    file_iter_id++;
+
+    strcpy(name, entry.filename);
+    return strlen(name);
 }
 
 int sfs_getfilesize(const char* name){
-    return 0;
+    inode_t root_node;
+    get_inode(superblock->root_dir_inode, &root_node);
+
+    int n = -1;
+    while(n){
+        dir_entry_t entry;
+        n = read_from_inode(&root_node, 0, sizeof(dir_entry_t), (void *)&entry);
+
+        if(entry.valid && (entry.filename, name) == 0){
+            inode_t node;
+            get_inode(entry.inode, &node);
+            return node.size;
+        }
+    }
+
+    return -1;
 }
 
+inode_t *open_inodes[MAX_OPEN_FILES];
+uint32_t open_inodes_number[MAX_OPEN_FILES];
+
+int next_free_open_file(){
+    for(int i = 0; i < MAX_OPEN_FILES; i++){
+        if(open_inodes_number[i] <= 0){
+            return i;
+        }
+    }
+    return -1;
+}
+
+
 int sfs_fopen(char* name){
-    return 0;
+    inode_t root_node;
+    get_inode(superblock->root_dir_inode, &root_node);
+
+    int n = -1;
+    int empty_slot = -1;
+    // open file if it exists
+    while(n){
+        dir_entry_t entry;
+        n = read_from_inode(&root_node, 0, sizeof(dir_entry_t), (void *)&entry);
+
+        if(entry.valid && strcmp(entry.filename, name) == 0){
+            int i = next_free_open_file();
+            if(i < 0){
+                return -1;
+            }
+            
+            inode_t *node = calloc(1, sizeof(inode_t));
+            get_inode(entry.inode, node);
+            open_inodes[i] = node;
+
+            open_inodes_number[i] = entry.inode;
+
+            return i;
+        }else{
+            if(empty_slot < 0 && entry.valid == 0){
+                empty_slot = n;
+            }
+        }
+    }
+
+    // create file if it doesn't exist
+    // todo when check n == 0, can expand?
+    if(empty_slot < 0){
+        printf("Error: No free slots in root directory\n");
+        return -1;
+    }
+
+    inode_t *node = calloc(1, sizeof(inode_t));
+    node->mode = 0;
+    node->link_count = 1;
+    node->size = 0;
+
+    dir_entry_t entry;
+    entry.valid = 1;
+    entry.inode = get_next_free_inode();
+    strcpy(entry.filename, name);
+
+    write_to_inode(&root_node, empty_slot * sizeof(dir_entry_t), sizeof(dir_entry_t), (void *)&entry);
+    write_to_inode(&root_node, entry.inode * sizeof(inode_t), sizeof(inode_t), (void *)node);
+    
+    int i = next_free_open_file();
+    open_inodes[i] = node;
+    open_inodes_number[i] = entry.inode;
+
+    return i;
 }
 
 int sfs_fclose(int fd){
