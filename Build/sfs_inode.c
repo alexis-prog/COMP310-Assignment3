@@ -10,22 +10,6 @@
 #include "sfs_block.h"
 #include "disk_emu.h"
 
-// INODE - 64 bytes -> 16 per block
-typedef struct _inode_t {
-    uint32_t mode;
-    uint32_t link_count;
-    uint32_t size;
-
-    uint32_t direct[INODE_DIRECT_ACCESS];
-    uint32_t indirect;
-} inode_t;
-
-// Inode Cache
-inode_t inode_cache[INODE_CACHE_SIZE];
-uint32_t inode_cache_index[INODE_CACHE_SIZE];
-uint16_t inode_cache_age[INODE_CACHE_SIZE];
-uint16_t inode_rolling_counter = 1;
-
 // I-Node management
 void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     uint32_t block_num = inode_num / INODES_PER_BLOCK;

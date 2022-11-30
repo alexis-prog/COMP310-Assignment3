@@ -14,7 +14,6 @@
 char* disk_name = "disk.sfs";
 
 
-
 // Initialization helper functions
 void init_superblock(){
     superblock->magic = MAGIC_NUMBER;
