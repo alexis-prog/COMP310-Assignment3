@@ -8,7 +8,29 @@
 #include "sfs_block.h"
 #include "sfs_api.h"
 
+// Block Cache
+block_t block_cache[BLOCK_CACHE_SIZE];
+uint32_t block_cache_index[BLOCK_CACHE_SIZE];
+uint16_t block_cache_age[BLOCK_CACHE_SIZE];
+uint16_t block_rolling_counter = 1;
+
+// In-memory
+superblock_t *superblock = NULL;
+
+superblock_t* get_superblock(){
+    return superblock;
+}
+
 // Block cache management
+void init_block_cache(){
+    // Invalidate cache upon initialization
+    for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
+        block_cache_index[i] = -1;
+    }
+
+    superblock = calloc(1, sizeof(superblock_t));
+}
+
 uint32_t get_oldest_block(){
     uint32_t oldest_index = 0;
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){

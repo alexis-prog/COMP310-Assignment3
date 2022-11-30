@@ -7,8 +7,8 @@
 #include <math.h>
 #include "sfs_api.h"
 #include "sfs_block.h"
-#include "sfs_inode.c"
-#include "sfs_dir.c"
+#include "sfs_inode.h"
+#include "sfs_dir.h"
 #include "disk_emu.h"
 
 char* disk_name = "disk.sfs";
@@ -16,6 +16,7 @@ char* disk_name = "disk.sfs";
 
 // Initialization helper functions
 void init_superblock(){
+    superblock_t *superblock = get_superblock();
     superblock->magic = MAGIC_NUMBER;
     superblock->block_size = BLOCK_SIZE;
     superblock->file_system_size = NUM_BLOCKS;
@@ -59,17 +60,11 @@ void init_free_list(){
 // API functions
 void mksfs(int fresh)
 {
-    // Invalidate cache upon initialization
-    for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
-        block_cache_index[i] = -1;
-    }
-    
+    init_block_cache();
+
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         inode_cache_index[i] = -1;
     }
-    
-
-    superblock = calloc(1, sizeof(superblock_t));
 
     if (fresh == 1)
     {
@@ -91,7 +86,7 @@ void mksfs(int fresh)
             exit(1);
         }
 
-        _read_block(0, (void *) superblock);
+        _read_block(0, (void *) get_superblock());
         // todo assert
     }
 }
@@ -101,7 +96,7 @@ uint32_t file_iter_id = 0;
 
 int sfs_getnextfilename(char* name){
     inode_t root_node;
-    get_inode(superblock->root_dir_inode, &root_node);
+    get_inode(get_superblock()->root_dir_inode, &root_node);
 
     dir_entry_t entry;
     int n = read_from_inode(&root_node, file_iter_id * sizeof(dir_entry_t), sizeof(dir_entry_t), (void *)&entry);
@@ -118,14 +113,14 @@ int sfs_getnextfilename(char* name){
 
 int sfs_getfilesize(const char* name){
     inode_t root_node;
-    get_inode(superblock->root_dir_inode, &root_node);
+    get_inode(get_superblock()->root_dir_inode, &root_node);
 
     int n = -1;
     while(n){
         dir_entry_t entry;
         n = read_from_inode(&root_node, 0, sizeof(dir_entry_t), (void *)&entry);
 
-        if(entry.valid && (entry.filename, name) == 0){
+        if(entry.valid && strcmp(entry.filename, name) == 0){
             inode_t node;
             get_inode(entry.inode, &node);
             return node.size;

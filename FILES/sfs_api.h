@@ -1,6 +1,8 @@
 #ifndef SFS_API_H
 #define SFS_API_H
 
+#include <stdint.h>
+
 // 
 #define MAGIC_NUMBER 0xABCD0005
 #define BLOCK_SIZE 1024

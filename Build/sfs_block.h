@@ -20,17 +20,11 @@ typedef struct _superblock_t {
     byte_t padding[BLOCK_SIZE - 5*sizeof(uint32_t)];
 } superblock_t;
 
-
-// Block Cache
-block_t block_cache[BLOCK_CACHE_SIZE];
-uint32_t block_cache_index[BLOCK_CACHE_SIZE];
-uint16_t block_cache_age[BLOCK_CACHE_SIZE];
-uint16_t block_rolling_counter = 1;
-
-// In-memory
-superblock_t *superblock = NULL;
+superblock_t* get_superblock();
 
 // Block cache management
+void init_block_cache();
+
 uint32_t get_oldest_block();
 
 void _write_block(uint32_t block_num, block_t* block);
