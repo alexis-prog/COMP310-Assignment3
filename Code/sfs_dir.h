@@ -8,4 +8,8 @@ typedef struct _dir_entry_t {
     char filename[MAXFILENAME];
 } dir_entry_t;
 
+void read_dir_table();
+
+dir_entry_t* get_dir_table_entry(int);
+
 #endif

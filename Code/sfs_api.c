@@ -37,8 +37,11 @@ void init_root_node(){
 
     root_node.mode = 0;
     root_node.link_count = 1;
-    root_node.size = 0;
+    root_node.size = BLOCK_SIZE;
     root_node.direct[0] = dir_block;
+    for(int i = 1; i < INODE_DIRECT_ACCESS; i++){
+        root_node.direct[i] = -1;
+    }
     root_node.indirect = -1;
 
     write_inode(&root_node, 0);
@@ -61,10 +64,7 @@ void init_free_list(){
 void mksfs(int fresh)
 {
     init_block_cache();
-
-    for(int i = 0; i < INODE_CACHE_SIZE; i++){
-        inode_cache_index[i] = -1;
-    }
+    init_inode_cache();
 
     if (fresh == 1)
     {
@@ -89,25 +89,22 @@ void mksfs(int fresh)
         _read_block(0, (void *) get_superblock());
         // todo assert
     }
+
+    read_dir_table();
 }
 
 
 uint32_t file_iter_id = 0;
 
 int sfs_getnextfilename(char* name){
-    inode_t root_node;
-    get_inode(get_superblock()->root_dir_inode, &root_node);
+    dir_entry_t *dir_entry = get_dir_table_entry(file_iter_id++);
 
-    dir_entry_t entry;
-    int n = read_from_inode(&root_node, file_iter_id * sizeof(dir_entry_t), sizeof(dir_entry_t), (void *)&entry);
-
-    if(n == 0 || entry.valid == 0){
+    if(dir_entry == NULL){
         return 0;
     }
 
-    file_iter_id++;
+    strcpy(name, dir_entry->filename);
 
-    strcpy(name, entry.filename);
     return strlen(name);
 }
 

@@ -10,15 +10,27 @@
 #include "sfs_block.h"
 #include "disk_emu.h"
 
+// Inode Cache
+inode_t inode_cache[INODE_CACHE_SIZE];
+uint32_t inode_cache_index[INODE_CACHE_SIZE];
+uint16_t inode_cache_age[INODE_CACHE_SIZE];
+uint16_t inode_rolling_counter = 1;
+
 // I-Node management
+void init_inode_cache(){
+    for(int i = 0; i < INODE_CACHE_SIZE; i++){
+        inode_cache_index[i] = -1;
+    }
+}
+
 void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     uint32_t block_num = inode_num / INODES_PER_BLOCK;
 
-    if(block_num > superblock->inode_table_length){
+    if(block_num > get_superblock()->inode_table_length){
         if(is_block_free(block_num)){
             set_block_status(block_num, 1);
-            superblock->inode_table_length++;
-            _write_block(0, (block_t*)superblock);
+            get_superblock()->inode_table_length++;
+            _write_block(0, (block_t*)get_superblock());
         } else {
             printf("Error: Block %d is not free, failed contiguous allocation of i-node table\n", block_num);
             exit(1);
@@ -34,7 +46,7 @@ void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
 }
 
 uint32_t get_oldest_inode(){
-    uint32_t oldest_index = -1;
+    uint32_t oldest_index = 0;
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] == -1){
             return i;
@@ -56,11 +68,12 @@ uint32_t get_oldest_inode(){
     return oldest_index;
 }
 
-void get_inode(uint32_t inode_num, inode_t* inode){
+void get_inode(uint32_t inode_num, inode_t *inode){
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] == inode_num){
             inode_cache_age[i] = inode_rolling_counter;
-            memcpy(inode, &inode_cache[i], sizeof(inode_t));
+            memcpy(inode, &(inode_cache[i]), sizeof(inode_t));
+            return;
         }
     }
 
@@ -85,7 +98,7 @@ void get_inode(uint32_t inode_num, inode_t* inode){
 }
 
 uint32_t get_next_free_inode(){
-    for(int i = 0; i < superblock->inode_table_length; i++){
+    for(int i = 0; i < get_superblock()->inode_table_length; i++){
         block_t block;
         _read_block(i + 1, &block);
 
@@ -97,19 +110,19 @@ uint32_t get_next_free_inode(){
         }
     }
 
-    return superblock->inode_table_length * INODES_PER_BLOCK + 1;
+    return get_superblock()->inode_table_length * INODES_PER_BLOCK + 1;
 }
 
 void write_inode(inode_t* node, uint32_t index){
     uint32_t block_num = index / INODES_PER_BLOCK;
-    if(block_num > superblock->inode_table_length){
-        if(block_num + 1 != superblock->inode_table_length){
+    if(block_num > get_superblock()->inode_table_length){
+        if(block_num + 1 != get_superblock()->inode_table_length){
             printf("Error: Failed contiguous allocation of i-node table\n");
             return;
         }
         if(is_block_free(block_num+1)){
             set_block_status(block_num, 1);
-            superblock->inode_table_length++;
+            get_superblock()->inode_table_length++;
         } else {
             printf("Error: Block %d is not free, failed contiguous allocation of i-node table\n", block_num);
             return;
