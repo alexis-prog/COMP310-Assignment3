@@ -87,7 +87,6 @@ void mksfs(int fresh)
         }
 
         _read_block(0, (void *) get_superblock());
-        // todo assert
     }
 
     read_dir_table();
@@ -189,7 +188,15 @@ int sfs_fopen(char* name){
 }
 
 int sfs_fclose(int fd){
-    //free(opened_files_names[fd]);
+    if(fd < 0 || fd >= MAX_OPEN_FILES){
+        printf("Error: Could not close file - Invalid file descriptor\n\n");
+        exit(1);
+    }
+
+    if(opened_files_names[fd] == NULL){
+        return -1;
+    }
+
     opened_files_names[fd] = NULL;
     opened_files[fd] = -1;
 
@@ -199,6 +206,15 @@ int sfs_fclose(int fd){
 }
 
 int sfs_fwrite(int fd, const char* buf, int ln){
+    if(fd < 0 || fd >= MAX_OPEN_FILES){
+        printf("Error: Could not read file - Invalid file descriptor\n\n");
+        exit(1);
+    }
+
+    if(opened_files_names[fd] == NULL){
+        return -1;
+    }
+
     inode_t inode;
     get_inode(opened_files[fd], &inode);
 
@@ -211,6 +227,15 @@ int sfs_fwrite(int fd, const char* buf, int ln){
 }
 
 int sfs_fread(int fd, char* buf, int ln){
+    if(fd < 0 || fd >= MAX_OPEN_FILES){
+        printf("Error: Could not read file - Invalid file descriptor\n\n");
+        exit(1);
+    }
+
+    if(opened_files_names[fd] == NULL){
+        return -1;
+    }
+
     inode_t inode;
     get_inode(opened_files[fd], &inode);
 
@@ -230,5 +255,6 @@ int sfs_fseek(int fd, int offset){
 }
 
 int sfs_remove(char* name){
+
     return 0;
 }

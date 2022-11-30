@@ -163,8 +163,8 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
         return -1;
     }*/
 
-    uint32_t eof_block = node->size / BLOCK_SIZE;
-    uint32_t eof_block_max = node->size % BLOCK_SIZE;
+    //uint32_t eof_block = node->size / BLOCK_SIZE;
+    //uint32_t eof_block_max = node->size % BLOCK_SIZE;
 
     uint32_t bytes_read = 0;
     while(bytes_read < size){
@@ -187,12 +187,14 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
             bytes_to_read = size - bytes_read;
         }
 
+/*
         if(block_num == eof_block){
             memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, MIN(bytes_to_read + offset, eof_block_max) - block_offset);
         }else{
             memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
         }
-
+*/
+        memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
     
         bytes_read += bytes_to_read;
         block_num++;
