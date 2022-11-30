@@ -116,10 +116,10 @@ uint32_t get_next_free_inode(){
 void write_inode(inode_t* node, uint32_t index){
     uint32_t block_num = index / INODES_PER_BLOCK;
     if(block_num > get_superblock()->inode_table_length){
-        if(block_num + 1 != get_superblock()->inode_table_length){
+        /*if(block_num + 1 != get_superblock()->inode_table_length){
             printf("Error: Failed contiguous allocation of i-node table\n");
             return;
-        }
+        }*/
         if(is_block_free(block_num+1)){
             set_block_status(block_num, 1);
             get_superblock()->inode_table_length++;

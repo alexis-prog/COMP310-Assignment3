@@ -18,6 +18,10 @@ void read_dir_table(){
     get_inode(get_superblock()->root_dir_inode , &root_node);
     dir_table_size = root_node.size / sizeof(dir_entry_t);
 
+    if(dir_table != NULL){
+        free(dir_table);
+    }
+
     dir_table = calloc(dir_table_size, sizeof(dir_entry_t));
     read_from_inode(&root_node, 0, root_node.size, dir_table);
 }
@@ -72,20 +76,25 @@ int remove_from_dir_table(int i){
     dir_table[i].valid = 0;
     int n = dir_table[i].inode;
 
-    for(int j = i + i; j < dir_table_size; j++){
-        memcpy(dir_table + j - 1, dir_table + j, sizeof(dir_entry_t));
+    dir_entry_t* tmp = calloc(dir_table_size - 1, sizeof(dir_entry_t));
+    for(int j = 0; j < i; j++){
+        memcpy(tmp + j, dir_table + j, sizeof(dir_entry_t));
     }
-    
-    //free(dir_table + dir_table_size - 1);
+
+    for(int j = i + 1; j < dir_table_size; j++){
+        memcpy(tmp + j - 1, dir_table + j, sizeof(dir_entry_t));
+    }
+
+    free(dir_table);
+    dir_table = tmp;
 
     dir_table_size--;
-    dir_table = realloc(dir_table, dir_table_size * sizeof(dir_entry_t));
 
     inode_t root_node;
     get_inode(get_superblock()->root_dir_inode , &root_node);
 
     root_node.size -= sizeof(dir_entry_t);
-    write_inode(get_superblock()->root_dir_inode, &root_node);
+    write_inode(&root_node, get_superblock()->root_dir_inode);
 
     write_dir_table();
 
