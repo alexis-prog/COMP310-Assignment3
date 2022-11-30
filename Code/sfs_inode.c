@@ -10,8 +10,6 @@
 #include "sfs_block.h"
 #include "disk_emu.h"
 
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-
 // Inode Cache
 inode_t inode_cache[INODE_CACHE_SIZE];
 uint32_t inode_cache_index[INODE_CACHE_SIZE];
@@ -157,15 +155,6 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
-/*
-    if(offset + size > node->size + 1){
-        printf("Error: Attempted to read past end of file\n");
-        return -1;
-    }*/
-
-    //uint32_t eof_block = node->size / BLOCK_SIZE;
-    //uint32_t eof_block_max = node->size % BLOCK_SIZE;
-
     uint32_t bytes_read = 0;
     while(bytes_read < size){
 
@@ -187,13 +176,6 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
             bytes_to_read = size - bytes_read;
         }
 
-/*
-        if(block_num == eof_block){
-            memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, MIN(bytes_to_read + offset, eof_block_max) - block_offset);
-        }else{
-            memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
-        }
-*/
         memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
     
         bytes_read += bytes_to_read;
@@ -218,14 +200,34 @@ int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length
 
         uint32_t current_block = node->size / BLOCK_SIZE;
 
+        if(current_block < INODE_DIRECT_ACCESS){
+            if(node->direct[current_block] != -1){
+                current_block++;
+            }
+        }else{
+            if(node->indirect != -1){
+                block_t indirect;
+                _read_block(node->indirect, &indirect);
+                
+                uint32_t indirect_block;
+                memcpy(&indirect_block, indirect.data + (current_block - INODE_DIRECT_ACCESS) * sizeof(uint32_t), sizeof(uint32_t));
+
+                if(indirect_block != -1){
+                    current_block++;
+                }
+            }
+        }
+
         for(int i = current_block; i < new_size / BLOCK_SIZE + 1; i++){
             uint32_t block_index = get_next_free_block();
+            set_block_status(block_index, 1);
 
             if(i < INODE_DIRECT_ACCESS){
                 node->direct[i] = block_index;
             }else{
-                if(node->indirect == 0){
+                if(node->indirect == -1){
                     node->indirect = get_next_free_block();
+                    set_block_status(node->indirect, 1);
                 }
 
                 block_t block;
@@ -235,6 +237,8 @@ int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length
 
                 _write_block(node->indirect, &block);
             }
+
+            
         }
 
 

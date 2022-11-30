@@ -24,7 +24,7 @@
 #define MAXFILENAME (64 - 5)
 #define MAX_FNAME_LENGTH MAXFILENAME
 
-#define MAX_OPEN_FILES 16
+#define MAX_OPEN_FILES 32
 
 // Never trust char size
 typedef uint8_t byte_t;

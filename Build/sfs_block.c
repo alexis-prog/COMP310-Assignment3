@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <math.h>
+#include <string.h>
 #include "sfs_block.h"
 #include "sfs_api.h"
 

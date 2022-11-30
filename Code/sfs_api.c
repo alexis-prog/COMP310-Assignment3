@@ -13,6 +13,10 @@
 
 char* disk_name = "disk.sfs";
 
+uint32_t opened_files[MAX_OPEN_FILES];
+char *opened_files_names[MAX_OPEN_FILES];
+int file_offset[MAX_OPEN_FILES];
+
 
 // Initialization helper functions
 void init_superblock(){
@@ -90,6 +94,12 @@ void mksfs(int fresh)
     }
 
     read_dir_table();
+    
+    // opened files init
+    for(int i = 0; i < MAX_OPEN_FILES; i++){
+        opened_files[i] = -1;
+        file_offset[i] = -1;
+    }
 }
 
 
@@ -125,23 +135,29 @@ int sfs_getfilesize(const char* name){
 }
 
 
-uint32_t opened_files[MAX_OPEN_FILES];
-char *opened_files_names[MAX_OPEN_FILES];
-int file_offset[MAX_OPEN_FILES];
+
 
 
 int sfs_fopen(char* name){
     int free = -1;
 
     // check if file is already opened
-    for(int i = 0; i < MAX_OPEN_FILES; i++){
+    /*for(int i = 0; i < MAX_OPEN_FILES; i++){
         if(opened_files_names[i] == NULL){
             free = i;
         }else if(strcmp(opened_files_names[i], name) == 0){
             return i;
         }
-    }
+    }*/
     
+    for(int i = 0; i < MAX_OPEN_FILES; i++){
+        if(opened_files[i] == -1){
+            free = i;
+        }else if(strcmp(opened_files_names[i], name) == 0){
+                return i;
+        }
+    }
+
     if(free == -1){
         printf("Error: Could not open file - No free file descriptors\n\n");
         exit(1);
@@ -150,12 +166,14 @@ int sfs_fopen(char* name){
     // check if file exists
     for(int i = 0; i < get_dir_table_size(); i++){
         if(strcmp(name, get_dir_table_entry(i)->filename) == 0){
-            opened_files_names[free] = name;
+            //opened_files_names[free] = name;
             opened_files[free] = get_dir_table_entry(i)->inode;
+            opened_files_names[free] = name;
 
             inode_t inode;
             get_inode(opened_files[free], &inode);
             file_offset[free] = inode.size;
+
             return free;
         }
     }
@@ -193,12 +211,16 @@ int sfs_fclose(int fd){
         exit(1);
     }
 
-    if(opened_files_names[fd] == NULL){
+    /*if(opened_files_names[fd] == NULL){
+        return -1;
+    }*/
+    if(opened_files[fd] == -1){
         return -1;
     }
 
-    opened_files_names[fd] = NULL;
+    //opened_files_names[fd] = NULL;
     opened_files[fd] = -1;
+    file_offset[fd] = -1;
 
     flush_inode_cache();
     flush_block_cache();
@@ -211,7 +233,7 @@ int sfs_fwrite(int fd, const char* buf, int ln){
         exit(1);
     }
 
-    if(opened_files_names[fd] == NULL){
+    if(opened_files[fd] == -1){
         return -1;
     }
 
@@ -221,7 +243,7 @@ int sfs_fwrite(int fd, const char* buf, int ln){
     int i = write_to_inode(&inode, file_offset[fd], buf, ln);
     write_inode(&inode, opened_files[fd]);
 
-    file_offset[fd] += ln;
+    file_offset[fd] += i;
 
     return i;
 }
@@ -232,7 +254,7 @@ int sfs_fread(int fd, char* buf, int ln){
         exit(1);
     }
 
-    if(opened_files_names[fd] == NULL){
+    if(opened_files[fd] == -1){
         return -1;
     }
 
