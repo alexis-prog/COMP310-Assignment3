@@ -297,10 +297,8 @@ main(int argc, char **argv)
         fprintf(stderr, "ERROR: Read wrong number of bytes, iter %d, expected %d, got %d, filename %s\n", 
                 i, (int)strlen(test_str), readsize, names[i]);
         error_count++;
-      }else{
-        fprintf(stderr, "%d good file name %s\n", i, names[i]);
       }
-
+      
       for (j = 0; j < strlen(test_str); j++) {
         if (test_str[j] != fixedbuf[j]) {
           fprintf(stderr, "ERROR: Wrong byte in %s at %d (%d,%d)\n", 
