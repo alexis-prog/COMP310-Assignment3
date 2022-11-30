@@ -156,7 +156,8 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
     uint32_t block_offset = offset % BLOCK_SIZE;
 
     uint32_t bytes_read = 0;
-    while(bytes_read < size){
+    uint32_t real_size = node->size - offset;
+    while(bytes_read < size && real_size > 0){
 
         uint32_t block_index;
         if(block_num < INODE_DIRECT_ACCESS){
@@ -175,10 +176,14 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
         if(bytes_to_read > size - bytes_read){
             bytes_to_read = size - bytes_read;
         }
+        if(real_size < bytes_to_read){
+            bytes_to_read = real_size;
+        }
 
         memcpy((byte_t *) buffer + bytes_read, block.data + block_offset, bytes_to_read);
     
         bytes_read += bytes_to_read;
+        real_size -= bytes_to_read;
         block_num++;
         block_offset = 0;
     }
@@ -186,7 +191,7 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
     return bytes_read;
 }
 
-int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
+int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
 
@@ -244,6 +249,8 @@ int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length
 
         node->size = new_size;
     }
+
+    write_inode(node, inode_index);
 
     uint32_t bytes_written = 0;
     while(bytes_written < length){

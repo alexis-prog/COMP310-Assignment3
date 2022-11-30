@@ -34,15 +34,16 @@ void init_superblock(){
 void init_root_node(){
     inode_t root_node;
     
-    uint32_t dir_block = get_next_free_block();
+    /*uint32_t dir_block = get_next_free_block();
     set_block_status(dir_block, 1);
+
     block_t *empty_block = calloc(1, sizeof(block_t));
-    _write_block(dir_block, empty_block);
+    _write_block(dir_block, empty_block);*/
 
     root_node.mode = 0;
     root_node.link_count = 1;
-    root_node.size = BLOCK_SIZE;
-    root_node.direct[0] = dir_block;
+    root_node.size = 0;
+    root_node.direct[0] = -1; //dir_block;
     for(int i = 1; i < INODE_DIRECT_ACCESS; i++){
         root_node.direct[i] = -1;
     }
@@ -211,14 +212,10 @@ int sfs_fclose(int fd){
         exit(1);
     }
 
-    /*if(opened_files_names[fd] == NULL){
-        return -1;
-    }*/
     if(opened_files[fd] == -1){
         return -1;
     }
 
-    //opened_files_names[fd] = NULL;
     opened_files[fd] = -1;
     file_offset[fd] = -1;
 
@@ -240,8 +237,9 @@ int sfs_fwrite(int fd, const char* buf, int ln){
     inode_t inode;
     get_inode(opened_files[fd], &inode);
 
-    int i = write_to_inode(&inode, file_offset[fd], buf, ln);
+    int i = write_to_inode(opened_files[fd], &inode, file_offset[fd], buf, ln);
     write_inode(&inode, opened_files[fd]);
+    flush_inode_cache();
 
     file_offset[fd] += i;
 

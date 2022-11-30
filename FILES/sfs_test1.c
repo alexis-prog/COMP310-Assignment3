@@ -292,9 +292,13 @@ main(int argc, char **argv)
     sfs_fseek(fds[i], 0);
     if (fds[i] >= 0) {
       readsize = sfs_fread(fds[i], fixedbuf, sizeof(fixedbuf));
+      
       if (readsize != strlen(test_str)) {
-        fprintf(stderr, "ERROR: Read wrong number of bytes\n");
+        fprintf(stderr, "ERROR: Read wrong number of bytes, iter %d, expected %d, got %d, filename %s\n", 
+                i, (int)strlen(test_str), readsize, names[i]);
         error_count++;
+      }else{
+        fprintf(stderr, "%d good file name %s\n", i, names[i]);
       }
 
       for (j = 0; j < strlen(test_str); j++) {

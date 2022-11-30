@@ -6,7 +6,7 @@
 // 
 #define MAGIC_NUMBER 0xABCD0005
 #define BLOCK_SIZE 1024
-#define NUM_BLOCKS 2048
+#define NUM_BLOCKS 256
 #define NUM_FREE_BLOCKS (NUM_BLOCKS / 8 / BLOCK_SIZE + 1)
 #define POINTER_SIZE 4
 
@@ -21,7 +21,7 @@
 #define DIR_ENTRY_SIZE 64
 #define DIR_ENTRIES_PER_BLOCK (BLOCK_SIZE / DIR_ENTRY_SIZE)
 
-#define MAXFILENAME (64 - 5)
+#define MAXFILENAME (64 - 4 - 4) // take array pointer in consideration (why the - 4)
 #define MAX_FNAME_LENGTH MAXFILENAME
 
 #define MAX_OPEN_FILES 32

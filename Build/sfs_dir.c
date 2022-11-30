@@ -40,7 +40,8 @@ int get_dir_table_size(){
 void write_dir_table(){
     inode_t root_node;
     get_inode(get_superblock()->root_dir_inode, &root_node);
-    write_to_inode(&root_node, 0, (byte_t *) dir_table, root_node.size);
+
+    write_to_inode(get_superblock()->root_dir_inode, &root_node, 0, (byte_t *) dir_table, dir_table_size * sizeof(dir_entry_t));
 }
 
 void write_to_dir_table(int i, dir_entry_t *entry){

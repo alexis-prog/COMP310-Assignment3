@@ -32,6 +32,6 @@ void flush_inode_cache();
 
 int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer);
 
-int write_to_inode(inode_t* node, uint32_t offset, byte_t* data, uint32_t length);
+int write_to_inode(uint32_t, inode_t*, uint32_t, byte_t*, uint32_t);
 
 #endif
