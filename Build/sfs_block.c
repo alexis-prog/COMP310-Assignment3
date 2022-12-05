@@ -31,7 +31,6 @@ void init_block_cache(){
     superblock = calloc(1, sizeof(superblock_t));
 }
 
-// find oldest block in cache and return its index
 uint32_t get_oldest_block(){
     uint32_t oldest_index = 0;
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
@@ -42,17 +41,13 @@ uint32_t get_oldest_block(){
             oldest_index = i;
         }
     }
-
-    // write oldest block to disk
     write_blocks(block_cache_index[oldest_index], 1, block_cache[oldest_index].data);
     block_rolling_counter++;
     return oldest_index;
 }
 
-// write block to cache
 void _write_block(uint32_t block_num, block_t* block){
 
-    // check if block was cached
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
         if(block_cache_index[i] == block_num){
             memcpy(block_cache[i].data, block->data, BLOCK_SIZE);
@@ -61,7 +56,6 @@ void _write_block(uint32_t block_num, block_t* block){
         }
     }
 
-    // free cache and write block
     unsigned int oldest = get_oldest_block();
 
     if(oldest == -1){
@@ -75,10 +69,8 @@ void _write_block(uint32_t block_num, block_t* block){
     block_cache_age[oldest] = block_rolling_counter;
 }
 
-// read block from either the cache or the disk
 void _read_block(uint32_t block_num, block_t* block){
 
-    // check if block was cached
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
         if(block_cache_index[i] == block_num){
             memcpy(block->data, block_cache[i].data, BLOCK_SIZE);
@@ -87,7 +79,6 @@ void _read_block(uint32_t block_num, block_t* block){
         }
     }
 
-    // otherwise free space in the cache and read block and 
     unsigned int oldest = get_oldest_block();
 
     if(oldest == -1){
@@ -101,7 +92,6 @@ void _read_block(uint32_t block_num, block_t* block){
     block_cache_age[oldest] = block_rolling_counter;
 }
 
-// check if block ID is free according to the bitmap
 int is_block_free(uint32_t block_num){
     uint32_t block_index = block_num / 8 / BLOCK_SIZE;
     
@@ -111,7 +101,6 @@ int is_block_free(uint32_t block_num){
    return (block.data[block_num / 8 % BLOCK_SIZE] & (1 << (block_num % 8))) == 0;
 }
 
-// Update the bitmap to reflect the status of a block
 void set_block_status(uint32_t block_num, int status){
     uint32_t block_index = block_num / 8 / BLOCK_SIZE;
     
@@ -127,7 +116,6 @@ void set_block_status(uint32_t block_num, int status){
     _write_block(superblock->file_system_size - 1 -  block_index, &block);
 }
 
-// find the next free block in the bitmap by iteration
 uint32_t get_next_free_block(){
     for(int i = NUM_BLOCKS - 1; i >= 0; i--){
         if(is_block_free(i)){
@@ -139,7 +127,6 @@ uint32_t get_next_free_block(){
     exit(1);
 }
 
-// write all cached blocks to disk
 void flush_block_cache(){
     for(int i = 0; i < BLOCK_CACHE_SIZE; i++){
         if(block_cache_index[i] != -1){
