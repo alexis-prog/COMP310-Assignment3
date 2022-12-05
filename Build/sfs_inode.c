@@ -16,13 +16,14 @@ uint32_t inode_cache_index[INODE_CACHE_SIZE];
 uint16_t inode_cache_age[INODE_CACHE_SIZE];
 uint16_t inode_rolling_counter = 1;
 
-// I-Node management
+// I-Node management in-memory initialization
 void init_inode_cache(){
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         inode_cache_index[i] = -1;
     }
 }
 
+// Take an inode and write it to disk at the given index
 void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     uint32_t block_num = inode_num / INODES_PER_BLOCK;
 
@@ -45,6 +46,7 @@ void write_inode_to_disk(uint32_t inode_num, inode_t* inode){
     _write_block(block_num + 1, &block);
 }
 
+// Find the oldest inode in the cache and return its index
 uint32_t get_oldest_inode(){
     uint32_t oldest_index = 0;
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
@@ -60,6 +62,7 @@ uint32_t get_oldest_inode(){
 
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] / INODES_PER_BLOCK == inode_block_num){
+            // save inode to disk before replacing
             write_inode_to_disk(inode_cache_index[i], &inode_cache[i]);
         }
     }
@@ -68,7 +71,9 @@ uint32_t get_oldest_inode(){
     return oldest_index;
 }
 
+// get the inode at the given index
 void get_inode(uint32_t inode_num, inode_t *inode){
+    // check if inode was cached
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] == inode_num){
             inode_cache_age[i] = inode_rolling_counter;
@@ -77,6 +82,7 @@ void get_inode(uint32_t inode_num, inode_t *inode){
         }
     }
 
+    // otherwise free the cache and read it from memory
     unsigned int oldest = get_oldest_inode();
 
     if(oldest == -1){
@@ -97,6 +103,7 @@ void get_inode(uint32_t inode_num, inode_t *inode){
     inode_rolling_counter++;
 }
 
+// get the index of the first free inode
 uint32_t get_next_free_inode(){
     for(int i = 0; i < get_superblock()->inode_table_length; i++){
         block_t block;
@@ -113,13 +120,11 @@ uint32_t get_next_free_inode(){
     return get_superblock()->inode_table_length * INODES_PER_BLOCK + 1;
 }
 
+// write inode to cache
 void write_inode(inode_t* node, uint32_t index){
+    // check that index is valid
     uint32_t block_num = index / INODES_PER_BLOCK;
     if(block_num > get_superblock()->inode_table_length){
-        /*if(block_num + 1 != get_superblock()->inode_table_length){
-            printf("Error: Failed contiguous allocation of i-node table\n");
-            return;
-        }*/
         if(is_block_free(block_num+1)){
             set_block_status(block_num, 1);
             get_superblock()->inode_table_length++;
@@ -143,6 +148,7 @@ void write_inode(inode_t* node, uint32_t index){
     inode_rolling_counter++;
 }
 
+// Flush all inodes to disk
 void flush_inode_cache(){
     for(int i = 0; i < INODE_CACHE_SIZE; i++){
         if(inode_cache_index[i] != -1){
@@ -151,6 +157,7 @@ void flush_inode_cache(){
     }
 }
 
+// read inode contents
 int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
@@ -191,6 +198,7 @@ int read_from_inode(inode_t* node, uint32_t offset, uint32_t size, void* buffer)
     return bytes_read;
 }
 
+// write into inode contents
 int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t* data, uint32_t length){
     uint32_t block_num = offset / BLOCK_SIZE;
     uint32_t block_offset = offset % BLOCK_SIZE;
@@ -203,8 +211,10 @@ int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t*
             return -1;
         }
 
+        // find (inode) id of the block to write to
         uint32_t current_block = node->size / BLOCK_SIZE;
 
+        // convert to block index
         if(current_block < INODE_DIRECT_ACCESS){
             if(node->direct[current_block] != -1){
                 current_block++;
@@ -223,6 +233,7 @@ int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t*
             }
         }
 
+        // acquire blocks for expansion if needed
         for(int i = current_block; i < new_size / BLOCK_SIZE + 1; i++){
             uint32_t block_index = get_next_free_block();
             set_block_status(block_index, 1);
@@ -250,8 +261,10 @@ int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t*
         node->size = new_size;
     }
 
+    // update the inode
     write_inode(node, inode_index);
 
+    // write the data to blocks
     uint32_t bytes_written = 0;
     while(bytes_written < length){
         uint32_t block_index;
@@ -284,6 +297,8 @@ int write_to_inode(uint32_t inode_index, inode_t* node, uint32_t offset, byte_t*
     return bytes_written;
 }
 
+
+//unregister inode
 void remove_inode(uint32_t index){
     inode_t node;
     get_inode(index, &node);
@@ -291,6 +306,7 @@ void remove_inode(uint32_t index){
     node.size = 0;
     node.link_count--;
 
+    // check if is fully dereferenced, if so, free blocks
     if(node.link_count <=0){
         for(int i = 0; i < INODE_DIRECT_ACCESS; i++){
             if(node.direct[i] != -1){

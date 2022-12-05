@@ -10,9 +10,11 @@
 #include "sfs_dir.h"
 #include "sfs_api.h"
 
+// Dynamic array of directory entries
 dir_entry_t *dir_table;
 int dir_table_size;
 
+// Load directory entries from disk into memory
 void read_dir_table(){
     inode_t root_node;
     get_inode(get_superblock()->root_dir_inode , &root_node);
@@ -26,6 +28,7 @@ void read_dir_table(){
     read_from_inode(&root_node, 0, root_node.size, dir_table);
 }
 
+// Get n-th directory entry
 dir_entry_t* get_dir_table_entry(int i){
     if(i < 0 || i >= dir_table_size){
         return NULL;
@@ -33,10 +36,12 @@ dir_entry_t* get_dir_table_entry(int i){
     return dir_table + i;
 }
 
+// Get directory entry array size
 int get_dir_table_size(){
     return dir_table_size;
 }
 
+// Write the directory table to disk
 void write_dir_table(){
     inode_t root_node;
     get_inode(get_superblock()->root_dir_inode, &root_node);
@@ -44,6 +49,7 @@ void write_dir_table(){
     write_to_inode(get_superblock()->root_dir_inode, &root_node, 0, (byte_t *) dir_table, dir_table_size * sizeof(dir_entry_t));
 }
 
+// Update the n-th entry in the directory table
 void write_to_dir_table(int i, dir_entry_t *entry){
     if(i < 0){
         return;
@@ -59,6 +65,7 @@ void write_to_dir_table(int i, dir_entry_t *entry){
     write_dir_table();
 }
 
+// Find a free directory entry from the table
 int get_free_dir_table_entry(){
     for(int i = 0; i < dir_table_size; i++){
         if(dir_table[i].inode == 0){
@@ -68,6 +75,8 @@ int get_free_dir_table_entry(){
     return dir_table_size;
 }
 
+
+// Unregister a file from the directory table
 int remove_from_dir_table(int i){
     if(i < 0 || i >= dir_table_size){
         return -1;
@@ -76,6 +85,8 @@ int remove_from_dir_table(int i){
     dir_table[i].valid = 0;
     int n = dir_table[i].inode;
 
+    // Realloc failed here b/c POSIX doesn't require it to allow shrinking
+    // Decided to still implement wasteful resizing to avoid management issues
     dir_entry_t* tmp = calloc(dir_table_size - 1, sizeof(dir_entry_t));
     for(int j = 0; j < i; j++){
         memcpy(tmp + j, dir_table + j, sizeof(dir_entry_t));
